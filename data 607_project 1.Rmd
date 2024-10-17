@@ -1,0 +1,91 @@
+---
+title: "Project 1"
+author: "Jayden Jiang"
+date: "2024-10-15"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(dplyr)
+library(readr)
+```
+## Load Data
+```{r}
+tournament_data <- readLines("https://raw.githubusercontent.com/JaydeeJan/Project-1/refs/heads/main/tournamentinfo.txt")
+
+head(tournament_data, 20)
+tail(tournament_data, 20)
+
+```
+## Extract Player Information 
+```{r}
+
+# Function to extract player information using regular expressions
+
+extract_player_info <- function(player_lines, tournament_data) {
+  player_name <- str_trim(str_match(player_lines[1], "\\|\\s*([A-Z\\s]+)\\s*\\|")[2])
+  player_state <- str_trim(str_match(player_lines[2], "\\s*([A-Z]{2})\\s*\\|")[2])
+  total_points <- as.numeric(str_trim(str_match(player_lines[1], "\\|\\s*([0-9\\.]+)\\s*\\|")[2]))
+  
+  pre_rating <- as.numeric(str_trim(str_match(player_lines[2], "R:\\s*([0-9]+)")[2]))
+  
+  opponents <- unlist(str_match_all(player_lines[1], "[WLDB]\\s*(\\d+)"))
+  
+  opponent_ratings <- c()
+  for (opponent in opponents) {
+    # Find the opponent's entry by looking for the line starting with the opponent's number
+    opp_start_line <- grep(paste0("^\\s*", opponent, "\\s*\\|"), tournament_data)
+    if (length(opp_start_line) > 0) {
+      # Extract the pre-rating of the opponent
+      opp_line <- tournament_data[opp_start_line + 1] # Rating is in the line below
+      opp_rating <- as.numeric(str_trim(str_match(opp_line, "R:\\s*([0-9]+)")[2]))
+      if (!is.na(opp_rating)) {
+        opponent_ratings <- c(opponent_ratings, opp_rating)
+      }
+    }
+  }
+  
+  # Calculate the average opponent rating
+  avg_opp_rating <- ifelse(length(opponent_ratings) > 0, mean(opponent_ratings), NA)
+  
+  # Return the extracted info as a data frame row
+  data.frame(
+    PlayerName = player_name,
+    PlayerState = player_state,
+    TotalPoints = total_points,
+    PlayerPreRating = pre_rating,
+    AvgOppRating = round(avg_opp_rating, 0)
+  )
+}
+
+```
+
+## Initialize Data Frame To Store The Result
+```{r}
+results <- data.frame(PlayerName = character(), PlayerState = character(),
+                      TotalPoints = numeric(), PlayerPreRating = numeric(), AvgOppRating = numeric())
+
+# Loop through the data and extract information for each player
+player_start_lines <- grep("^\\s+\\d+\\s*\\|", tournament_data)
+
+for (i in seq_along(player_start_lines)) {
+  # Each player block consists of two consecutive lines
+  player_lines <- tournament_data[player_start_lines[i]:(player_start_lines[i] + 1)]
+  # Extract player info and add it to the results data frame
+  player_info <- extract_player_info(player_lines, tournament_data)
+  results <- rbind(results, player_info)
+}
+
+# Show the resulting data frame
+head(results, 10)
+tail(results, 10)
+
+```
+
+## Generates the result to .CSV file
+```{r}
+write.csv(results, file = "tournament_results.csv", row.names = FALSE)
+```
+
